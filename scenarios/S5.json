@@ -1,0 +1,57 @@
+{
+ "project": "trainticket",
+ "id": "S5",
+ "title": "Advanced search: the cheapest, the quickest and the fewest-stops trips, a transfer via Suzhou; booking the cheapest trip, collecting the ticket and entering the station",
+ "description": "A registered passenger logs in and uses the advanced search from Shanghai to Nanjing on 1 October 2026 three times: for the cheapest trips, for the quickest trips and for the trips with the fewest stops. They also ask for trips with a transfer at Suzhou (Shanghai — Suzhou — Nanjing) on the same date. The cheapest option turns out to be a regular train (the 'Other' train type, not high-speed): they open its details, take the first contact from their contact book and book a first-class seat on it without food, assurance or consignment. They refresh their list of orders, pay for the order from the internal account balance, collect the ticket and enter the station (board the train) with it.",
+ "input": "text",
+ "steps": [
+  {
+   "n": 1,
+   "action": "Log in with username and password"
+  },
+  {
+   "n": 2,
+   "action": "Advanced search: the cheapest trips from Shanghai to Nanjing on 1 October 2026"
+  },
+  {
+   "n": 3,
+   "action": "Advanced search: the quickest trips from Shanghai to Nanjing on 1 October 2026"
+  },
+  {
+   "n": 4,
+   "action": "Advanced search: the trips with the fewest stops from Shanghai to Nanjing on 1 October 2026"
+  },
+  {
+   "n": 5,
+   "action": "Ask for trips with a transfer at Suzhou (Shanghai — Suzhou — Nanjing) on 1 October 2026"
+  },
+  {
+   "n": 6,
+   "action": "Open the details of the cheapest trip found (a regular, 'Other'-type train)"
+  },
+  {
+   "n": 7,
+   "action": "Open the contact book and take the first contact"
+  },
+  {
+   "n": 8,
+   "action": "Book a first-class seat on the cheapest (regular) trip for this contact, without food, assurance or consignment"
+  },
+  {
+   "n": 9,
+   "action": "Refresh the list of orders"
+  },
+  {
+   "n": 10,
+   "action": "Pay for the order from the internal account balance"
+  },
+  {
+   "n": 11,
+   "action": "Collect the ticket for the order"
+  },
+  {
+   "n": 12,
+   "action": "Enter the station (board the train) with the order"
+  }
+ ]
+}

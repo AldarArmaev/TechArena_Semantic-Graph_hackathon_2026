@@ -1,0 +1,69 @@
+{
+ "project": "trainticket",
+ "id": "S3",
+ "title": "Family trip on a high-speed train: two passengers, a new contact, station food, assurance and a small consignment; paying for both orders",
+ "description": "A registered passenger logs in and searches for high-speed (GaoTie/DongChe) trains from Shanghai to Suzhou departing on 1 October 2026, opens the details of the first trip found and browses the food stores at Suzhou station. They open their contact book, take the first contact and also add a new contact (a companion with an ID card). They book a first-class seat on that trip for the first contact with food from a station store, assurance (insurance) of the first type and a luggage consignment of only 0.5 kg to a consignee; then they book a second-class seat on the same trip for the new contact — without food, assurance or consignment. They refresh the list of orders, open both new orders and pay for both from the internal account balance. Finally they check what a 0.5 kg consignment within the region costs and look at the list of assurance types.",
+ "input": "text",
+ "steps": [
+  {
+   "n": 1,
+   "action": "Log in with username and password"
+  },
+  {
+   "n": 2,
+   "action": "Search high-speed (GaoTie/DongChe) trains from Shanghai to Suzhou departing on 1 October 2026"
+  },
+  {
+   "n": 3,
+   "action": "Open the details of the first trip found"
+  },
+  {
+   "n": 4,
+   "action": "Browse the food stores at Suzhou station"
+  },
+  {
+   "n": 5,
+   "action": "Open the contact book and take the first contact"
+  },
+  {
+   "n": 6,
+   "action": "Add a new contact (a companion with an ID card) to the contact book"
+  },
+  {
+   "n": 7,
+   "action": "Book a first-class seat on the trip for the first contact, with food from a station store, assurance (insurance) of the first type and a luggage consignment of 0.5 kg to a consignee"
+  },
+  {
+   "n": 8,
+   "action": "Book a second-class seat on the same trip for the new contact, without food, assurance or consignment"
+  },
+  {
+   "n": 9,
+   "action": "Refresh the list of orders"
+  },
+  {
+   "n": 10,
+   "action": "Open the first new order"
+  },
+  {
+   "n": 11,
+   "action": "Open the second new order"
+  },
+  {
+   "n": 12,
+   "action": "Pay for the first order from the internal account balance"
+  },
+  {
+   "n": 13,
+   "action": "Pay for the second order from the internal account balance"
+  },
+  {
+   "n": 14,
+   "action": "Check what a 0.5 kg consignment within the region costs"
+  },
+  {
+   "n": 15,
+   "action": "Look at the list of assurance types"
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+{
+ "project": "trainticket",
+ "id": "S0",
+ "title": "My account: contacts, orders of both train types, paid orders, luggage consignments",
+ "description": "A registered passenger logs in and opens their contact book. They refresh their list of orders twice — for high-speed (GaoTie/DongChe) trains and for regular ('Other' type) trains, which are kept separately — and then refresh the orders once more with the filter 'Paid' status. Finally they look up the luggage consignments registered on their account. Nothing is searched, booked or paid.",
+ "input": "text",
+ "steps": [
+  {
+   "n": 1,
+   "action": "Log in with username and password"
+  },
+  {
+   "n": 2,
+   "action": "Open the contact book"
+  },
+  {
+   "n": 3,
+   "action": "Refresh the list of orders for high-speed (GaoTie/DongChe) trains"
+  },
+  {
+   "n": 4,
+   "action": "Refresh the list of orders for regular ('Other' type) trains"
+  },
+  {
+   "n": 5,
+   "action": "Refresh the list of orders filtered by the 'Paid' status"
+  },
+  {
+   "n": 6,
+   "action": "Look up the luggage consignments registered on the account"
+  }
+ ]
+}

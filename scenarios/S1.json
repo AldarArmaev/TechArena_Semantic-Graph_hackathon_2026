@@ -1,0 +1,65 @@
+{
+ "project": "trainticket",
+ "id": "S1",
+ "title": "Buying a high-speed train ticket with food on the train, insurance and luggage; paying from the account; collecting the ticket and boarding",
+ "description": "A registered passenger logs in with a username and password. They search for high-speed (GaoTie/DongChe) trains from Shanghai to Suzhou departing on 1 October 2026 and open the details of the first trip in the results. They look at the food menu offered on that trip. They open their contact book and take the first contact as the passenger. They book one first-class seat on that trip for this contact, adding food on the train (the first dish from the menu), assurance (insurance) of the first type and luggage consignment of 2 kg to a consignee. They refresh their list of orders, open the new order and check its price. They pay for the order from their internal account balance. They collect the ticket for the order and then enter the station (board the train) with it. Finally they look up the luggage consignment record and the assurance record of the order.",
+ "input": "text",
+ "steps": [
+  {
+   "n": 1,
+   "action": "Log in with username and password"
+  },
+  {
+   "n": 2,
+   "action": "Search high-speed (GaoTie/DongChe) trains from Shanghai to Suzhou departing on 1 October 2026"
+  },
+  {
+   "n": 3,
+   "action": "Open the details of the first trip found"
+  },
+  {
+   "n": 4,
+   "action": "View the food menu offered on this trip"
+  },
+  {
+   "n": 5,
+   "action": "Open the contact book and take the first contact"
+  },
+  {
+   "n": 6,
+   "action": "Book one first-class seat on the trip for this contact, with food on the train, assurance (insurance) of the first type and luggage consignment of 2 kg to a consignee"
+  },
+  {
+   "n": 7,
+   "action": "Refresh the list of orders"
+  },
+  {
+   "n": 8,
+   "action": "Open the new order"
+  },
+  {
+   "n": 9,
+   "action": "Check the price of the order"
+  },
+  {
+   "n": 10,
+   "action": "Pay for the order from the internal account balance"
+  },
+  {
+   "n": 11,
+   "action": "Collect the ticket for the order"
+  },
+  {
+   "n": 12,
+   "action": "Enter the station (board the train) with the order"
+  },
+  {
+   "n": 13,
+   "action": "Look up the luggage consignment record of the order"
+  },
+  {
+   "n": 14,
+   "action": "Look up the assurance (insurance) record of the order"
+  }
+ ]
+}

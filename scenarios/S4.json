@@ -1,0 +1,65 @@
+{
+ "project": "trainticket",
+ "id": "S4",
+ "title": "A newly registered passenger with an empty balance: booking with food on the train and assurance, external payment, cancelling the paid order with a refund",
+ "description": "A new passenger registers an account (username, password, gender, ID document, e-mail) and logs in with it. Having no contacts yet, they add one (themselves). They search for high-speed (GaoTie/DongChe) trains from Shanghai to Suzhou departing on 1 October 2026, open the details of the first trip found and view the food menu offered on it. They book a first-class seat on that trip for the new contact with food on the train and assurance (insurance) of the first type, without a consignment. They refresh their list of orders, open the new order and check its price. They pay for the order: the internal account balance of a new user is empty, so the payment is completed through the external payment channel. Then they ask how much would be refunded if the paid order were cancelled, cancel it (the refund goes back to the internal balance), and refresh the list of orders filtered by the 'Cancel' status.",
+ "input": "text",
+ "steps": [
+  {
+   "n": 1,
+   "action": "Register a new passenger account (username, password, gender, ID document, e-mail)"
+  },
+  {
+   "n": 2,
+   "action": "Log in with the new username and password"
+  },
+  {
+   "n": 3,
+   "action": "Add a contact (the passenger themselves) to the empty contact book"
+  },
+  {
+   "n": 4,
+   "action": "Search high-speed (GaoTie/DongChe) trains from Shanghai to Suzhou departing on 1 October 2026"
+  },
+  {
+   "n": 5,
+   "action": "Open the details of the first trip found"
+  },
+  {
+   "n": 6,
+   "action": "View the food menu offered on this trip"
+  },
+  {
+   "n": 7,
+   "action": "Book a first-class seat on the trip for the new contact, with food on the train and assurance (insurance) of the first type, without consignment"
+  },
+  {
+   "n": 8,
+   "action": "Refresh the list of orders"
+  },
+  {
+   "n": 9,
+   "action": "Open the new order"
+  },
+  {
+   "n": 10,
+   "action": "Check the price of the order"
+  },
+  {
+   "n": 11,
+   "action": "Pay for the order: the internal balance is empty, so the payment is completed through the external payment channel"
+  },
+  {
+   "n": 12,
+   "action": "Ask how much would be refunded if the paid order were cancelled"
+  },
+  {
+   "n": 13,
+   "action": "Cancel the paid order (the refund goes back to the internal balance)"
+  },
+  {
+   "n": 14,
+   "action": "Refresh the list of orders filtered by the 'Cancel' status"
+  }
+ ]
+}

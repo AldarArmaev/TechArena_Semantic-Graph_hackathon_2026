@@ -1,0 +1,65 @@
+{
+ "project": "trainticket",
+ "id": "S2",
+ "title": "Buying a regular train ticket with station food and no insurance; paying and cancelling with a refund; a second order rebooked to a cheaper seat class",
+ "description": "A registered passenger logs in. They search for regular trains (the 'Other' train type, not high-speed) from Shanghai to Nanjing departing on 1 October 2026 and open the details of the first trip in the results. They browse the food stores at Suzhou station. They open their contact book and take the first contact as the passenger. They book one first-class seat on that regular train for this contact with food from a station store, without assurance (insurance) and without luggage consignment. They refresh their list of orders, pay for the order from the internal account balance, ask how much would be refunded if the order were cancelled, and cancel the order. Then they book another first-class seat on the same regular train for the same contact with the same station food, refresh the orders, pay for the new order, and rebook this paid ticket to a second-class seat on the same regular train: the second-class ticket is cheaper, so the difference is refunded to the internal account balance.",
+ "input": "text",
+ "steps": [
+  {
+   "n": 1,
+   "action": "Log in with username and password"
+  },
+  {
+   "n": 2,
+   "action": "Search regular trains (the 'Other' train type, not high-speed) from Shanghai to Nanjing departing on 1 October 2026"
+  },
+  {
+   "n": 3,
+   "action": "Open the details of the first trip found"
+  },
+  {
+   "n": 4,
+   "action": "Browse the food stores at Suzhou station"
+  },
+  {
+   "n": 5,
+   "action": "Open the contact book and take the first contact"
+  },
+  {
+   "n": 6,
+   "action": "Book one first-class seat on the regular train for this contact, with food from a station store, no assurance (insurance) and no luggage consignment"
+  },
+  {
+   "n": 7,
+   "action": "Refresh the list of orders"
+  },
+  {
+   "n": 8,
+   "action": "Pay for the order from the internal account balance"
+  },
+  {
+   "n": 9,
+   "action": "Ask how much would be refunded if the order were cancelled"
+  },
+  {
+   "n": 10,
+   "action": "Cancel the order"
+  },
+  {
+   "n": 11,
+   "action": "Book another first-class seat on the same regular train for the same contact with the same station food"
+  },
+  {
+   "n": 12,
+   "action": "Refresh the list of orders"
+  },
+  {
+   "n": 13,
+   "action": "Pay for the new order from the internal account balance"
+  },
+  {
+   "n": 14,
+   "action": "Rebook the paid ticket to a second-class seat on the same regular train (the cheaper ticket: the difference is refunded to the internal balance)"
+  }
+ ]
+}

@@ -1,0 +1,65 @@
+{
+ "project": "trainticket",
+ "id": "S7",
+ "title": "After collecting the ticket: refused cancellation and rebooking, changing the consignee, orders filtered by dates",
+ "description": "A registered passenger logs in, searches for high-speed (GaoTie/DongChe) trains from Shanghai to Suzhou departing on 1 October 2026, takes the first contact from the contact book and books a first-class seat on the first trip found with a luggage consignment of 3 kg to a consignee, without food or assurance. They refresh the list of orders, pay for the order from the internal account balance and collect the ticket. Then they ask how much would be refunded for this order and try to cancel it — the system refuses, because the ticket has already been collected; they try to rebook the order onto the second high-speed trip found — the system refuses for the same reason. They look up the luggage consignment of the order and change the consignee's name and phone number. Finally they refresh the list of orders filtered by travel date (September — December 2026) and then filtered by purchase date (today).",
+ "input": "text",
+ "steps": [
+  {
+   "n": 1,
+   "action": "Log in with username and password"
+  },
+  {
+   "n": 2,
+   "action": "Search high-speed (GaoTie/DongChe) trains from Shanghai to Suzhou departing on 1 October 2026"
+  },
+  {
+   "n": 3,
+   "action": "Open the contact book and take the first contact"
+  },
+  {
+   "n": 4,
+   "action": "Book a first-class seat on the first trip found for this contact, with a luggage consignment of 3 kg to a consignee, without food or assurance"
+  },
+  {
+   "n": 5,
+   "action": "Refresh the list of orders"
+  },
+  {
+   "n": 6,
+   "action": "Pay for the order from the internal account balance"
+  },
+  {
+   "n": 7,
+   "action": "Collect the ticket for the order"
+  },
+  {
+   "n": 8,
+   "action": "Ask how much would be refunded for the collected order"
+  },
+  {
+   "n": 9,
+   "action": "Try to cancel the collected order (the system refuses)"
+  },
+  {
+   "n": 10,
+   "action": "Try to rebook the collected order onto the second high-speed trip found (the system refuses)"
+  },
+  {
+   "n": 11,
+   "action": "Look up the luggage consignment of the order"
+  },
+  {
+   "n": 12,
+   "action": "Change the consignee's name and phone number in the consignment"
+  },
+  {
+   "n": 13,
+   "action": "Refresh the list of orders filtered by travel date (September — December 2026)"
+  },
+  {
+   "n": 14,
+   "action": "Refresh the list of orders filtered by purchase date (today)"
+  }
+ ]
+}
