@@ -58,7 +58,7 @@ class Catalog:
         self.data_pairs = {(self.nodes[s]['method'],t)
                            for s, links in self.links.items() if self.nodes.get(s,{}).get('kind') == 'call_site'
                            for t in links.get('data_access',[])}
-        files = sorted({m['file'] for m in self.methods.values()})
+        files = sorted({t['file'] for t in self.types.values()})
         for file in files:
             try:
                 unit = j.parse.parse((self.source / file).read_text(encoding='utf-8-sig'))
@@ -150,7 +150,7 @@ class Catalog:
                     name = a['name'].split('.')[-1]
                     if name.endswith('Mapping'):
                         paths = re.findall(r'"([^"]*)"', a['args'])
-                        paths = [p for p in paths if p.startswith('/') or not p] or ['']
+                        paths = [p for p in paths if p.startswith(('/','api/')) or not p] or ['']
                         verbs = re.findall(r'RequestMethod\.(\w+)', a['args'])
                         if name != 'RequestMapping':
                             verbs = [name[:-7].upper()]
