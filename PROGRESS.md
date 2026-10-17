@@ -1,5 +1,19 @@
 # Solver progress — 2026-10-17
 
+## Improvement pass после первой отправки
+
+Подтверждённый leaderboard baseline команды Gigachads: **0.907290** (S1 0.909, S2 0.897, S3 0.890, S4 0.911, S5 0.913, S6 0.907, S7 0.924). Исходный ответ сохранён локально как `solution/output/baseline-0.90729.json`; исходный ZIP остаётся отдельным от новой кандидатной версии. Скрытый score новой версии пока не измерен, поэтому **улучшение leaderboard не заявляется**.
+
+Source-backed исправления:
+
+1. `RoutePlanServiceImpl.searchCheapestResult` использует `Float.MAX_VALUE` как числовой sentinel. Раньше `Engine.field` возвращал символический `TypeRef`, сравнение становилось `Unknown`, и S5 порождал семь путей, включая один несовместимый. Стандартная константа Java теперь числовая; S5 проходит одним путём без неопределённых ветвей. Набор рёбер S5 не изменился, но убраны произвольные ветви и путь с `IndexOutOfBoundsException`.
+2. `PriceConfig.basicPriceRate` и `firstClassPriceRate` объявлены `double`, а планировщик передавал значения JSON-строками. Прежний `bind_handler` копировал их как Python `str`: выражение `distance * rate` в `BasicServiceImpl` повторяло строку, затем S6 падал на оплате с `NumberFormatException`. Модель Jackson binding теперь приводит числовые поля по Java-типу. S6 доходит до `Payment Success` и добавляет восемь достижимых рёбер статуса заказа (`executes`/`calls`/`remote`/`data`).
+3. В `StationFoodController.getFoodStoresOfStation` маршрут объявлен с `{stationId}`, но параметр — `@PathVariable String stationName`; Spring связывает по имени и выбрасывает `MissingPathVariableException` до входа в метод. Прежняя модель исполняла метод с `Unknown` и включала лишние рёбра сервиса/SQL. Теперь S2/S3 исключают по четыре таких ребра. Это отражает исходник, но остаётся риск расхождения с абстракцией организаторов или сценарием, который подразумевает успешный просмотр магазина.
+
+Новый полный ответ: `solution/output/answer-improved.json`; компактный отчёт: `solution/output/audit-improved.json`. Количество рёбер S0–S7: **64, 482, 480, 428, 507, 613, 454, 429**. Все восемь сценариев имеют один допустимый путь без остановки. S0 остался **0.989583**, локальный evaluator принял все ID и отношения. Добавлены контрастные тесты на числовые поля запроса, Java sentinel, Spring binding, успешную оплату нового административного рейса, fallback-запрос для обычного поезда, отказ после `COLLECTED`, а также guard-условия еды и MQ. Никакие рёбра не добавлены по ID сценария.
+
+Оставшиеся рискованные кластеры: S0/S4/S7 `NullPointerException` при безусловном разборе пустых дат в `OrderServiceImpl.queryOrders`; несоответствие UI-действия «browse food stores» проблемному Spring mapping; точность ORM collection loading и Spring callback annotation; невидимые для локальной проверки FP/FN скрытых сценариев. Следующие три перспективных шага: получить feedback новой отправки по S1–S7, проверить фактический UI endpoint для станции и обработку неуспешного binding, затем аудит SQL/collection рёбер по provenance и lifecycle сущностей.
+
 ## Текущее состояние
 
 Основной Python solver находится в `solution/`; запуск описан в `solution/README.md`. Это статический анализатор Java/Spring поверх skeleton, сценариев и снимка SQL. Train Ticket и его сервисы не запускались; runtime traces не собирались. Rust-порт не начат: после этой итерации приоритет — качество рёбер, а не бонус языка.
