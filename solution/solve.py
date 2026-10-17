@@ -19,6 +19,7 @@ def main():
     p.add_argument('-o','--output',type=Path,default=root/'solution/output/answer.json')
     p.add_argument('--explain',action='store_true')
     p.add_argument('--diagnostics',type=Path)
+    p.add_argument('--audit',type=Path,help='write compact uncertainty and step audit')
     p.add_argument('--max-paths',type=int,default=8)
     args=p.parse_args()
     start=time.perf_counter()
@@ -28,11 +29,17 @@ def main():
     if not files: p.error('No scenario files matched')
     answer={'project':c.graph['project'],'scenarios':{}}
     diagnostics={'parser':c.diagnostics,'scenarios':{}}
+    audits={}
     for file in files:
         scenario=json.loads(Path(file).read_text(encoding='utf-8'))
         block,report=run_scenario(c,db,scenario,args.max_paths)
         answer['scenarios'][scenario['id']]=block
         diagnostics['scenarios'][scenario['id']]=report
+        if args.audit:
+            from ttsolver.audit import summarize
+            audit=summarize(report)
+            audit['common_edges']=len(block['edges'])
+            audits[scenario['id']]=audit
         print(f"{scenario['id']}: {len(block['edges'])} edges, {report['paths']} paths, {report['halted_paths']} halted",file=sys.stderr)
         if args.explain:
             for step in report['steps']:
@@ -46,6 +53,9 @@ def main():
     if args.diagnostics:
         args.diagnostics.parent.mkdir(parents=True,exist_ok=True)
         args.diagnostics.write_text(json.dumps(diagnostics,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+    if args.audit:
+        args.audit.parent.mkdir(parents=True,exist_ok=True)
+        args.audit.write_text(json.dumps({'scenarios':audits},ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     print(f"Wrote {args.output}; {diagnostics['seconds']:.2f}s",file=sys.stderr)
 
 

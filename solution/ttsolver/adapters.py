@@ -241,9 +241,8 @@ class Adapters:
             e.diagnostic('no unique HTTP handler for '+verb+' '+url)
             raise JavaException('HttpClientErrorException')
         body = entity.fields.get('body') if isinstance(entity,Obj) else entity
-        e.event('HttpHandlerEntered',mid,site,'exact verb/path/deployment match')
         self.filter()
-        result=self.bind_handler(mid,match,body)
+        result=self.bind_handler(mid,match,body,remote_site=site)
         self.serialize_entities(result)
         return result if isinstance(result,Obj) and result.type in ('ResponseEntity','HttpEntity') else Obj('ResponseEntity',{'body':result})
 
@@ -268,7 +267,7 @@ class Adapters:
         elif isinstance(value,list):
             for child in value: self.serialize_entities(child)
 
-    def bind_handler(self,mid,match,body):
+    def bind_handler(self,mid,match,body,remote_site=None):
         e,c = self.e,self.e.c
         astnode = c.ast[mid]
         template = next(path for _,path,pattern,m in c.routes if m==mid and pattern.fullmatch(match.string))
@@ -280,7 +279,12 @@ class Adapters:
             t = type_name(p.type)
             if 'PathVariable' in anns:
                 key = annotation_value(p.annotations,'PathVariable') or annotation_value(p.annotations,'PathVariable','name') or p.name
-                value = pathvalues.get(key,Unknown('path variable '+key))
+                if key not in pathvalues:
+                    e.event('BindingFailure',mid,e.c.site(mid,astnode),
+                            'URI template lacks @PathVariable '+key,
+                            values={'available':sorted(pathvalues)})
+                    raise JavaException('MissingPathVariableException')
+                value = pathvalues[key]
                 if t in ('int','Integer','long','Long'): value = self.number(value,True)
                 elif t in ('double','Double','float','Float'): value = self.number(value)
                 elif t in ('boolean','Boolean'): value = value=='true'
@@ -289,14 +293,32 @@ class Adapters:
             else:
                 target = c.resolve_type(t,mid)
                 if isinstance(body,dict):
-                    value = Obj(target,{n:e.default(ft) for n,(ft,_,_) in c.fields.get(target,{}).items()})
-                    value.fields.update(deepcopy(body))
+                    value = self.request_object(target,body)
                 elif isinstance(body,Obj) and target in c.types:
                     value = deepcopy(body)
                     value.type = target
                 else: value = deepcopy(body)
                 args.append(value)
+        if remote_site is not None:
+            e.event('HttpHandlerEntered',mid,remote_site,'exact verb/path/deployment match')
         return e.invoke(mid,args)
+
+    def request_object(self,target,body):
+        """Model Jackson binding against declared Java field types."""
+        fields=self.e.c.fields.get(target,{})
+        values={name:self.e.default(ft) for name,(ft,_,_) in fields.items()}
+        for name,raw in body.items():
+            value=deepcopy(raw)
+            if name in fields and value is not None and not isinstance(value,Unknown):
+                field_type=fields[name][0].split('.')[-1]
+                if field_type in ('int','long','short','byte','Integer','Long','Short','Byte'):
+                    value=self.number(value,integer=True)
+                elif field_type in ('double','float','Double','Float','BigDecimal'):
+                    value=self.number(value)
+                elif field_type in ('boolean','Boolean') and isinstance(value,str):
+                    value=value.lower()=='true'
+            values[name]=value
+        return Obj(target,values)
 
     def message(self,args,site):
         e,c = self.e,self.e.c

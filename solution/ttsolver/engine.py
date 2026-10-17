@@ -104,6 +104,10 @@ class Engine:
                          'Short':(2**15-1,-2**15),'Byte':(2**7-1,-2**7)}
             if short in java_limits and name in ('MAX_VALUE','MIN_VALUE'):
                 return java_limits[short][name=='MIN_VALUE']
+            float_limits={'Float':('3.4028235e38','1.4e-45'),
+                          'Double':('1.7976931348623157e308','4.9e-324')}
+            if short in float_limits and name in ('MAX_VALUE','MIN_VALUE'):
+                return Decimal(float_limits[short][name=='MIN_VALUE'])
             tid = self.c.resolve_type(obj.name,self.mid)
             declaration = self.c.type_ast.get(tid)
             if isinstance(declaration,j.tree.EnumDeclaration):

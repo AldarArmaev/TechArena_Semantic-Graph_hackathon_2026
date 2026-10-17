@@ -1,4 +1,5 @@
 from copy import deepcopy
+from collections import Counter
 from dataclasses import dataclass, field
 from .engine import Engine, NeedChoice, JavaException, Limit
 from .planner import Planner
@@ -67,7 +68,25 @@ def run_scenario(catalog,initial_db,scenario,max_paths=8):
     viable=[path for path in paths if not path.inconsistent]
     projections=[policy.project(path.events,catalog) for path in (viable or paths)]
     edges=set.intersection(*projections) if projections else set()
+    support=Counter(edge for projection in projections for edge in projection)
+    conditional=[]
+    for edge,count in sorted(support.items()):
+        if count==len(projections): continue
+        source,relation,target=edge
+        origins=[]
+        for path in viable or paths:
+            for event in path.events:
+                if policy.relations.get(event.kind)!=relation: continue
+                event_source='scenario:'+event.scenario if relation=='executes' else event.method
+                event_target=event.method if relation=='executes' else event.target
+                if (event_source,event_target)==(source,target):
+                    origins.append({'step':event.step,'method':event.method,'site':event.site,
+                                    'conditions':event.conditions,'evidence':event.evidence})
+                    break
+        conditional.append({'edge':{'source':source,'relation':relation,'target':target},
+                            'support':count,'feasible_paths':len(projections),'origins':origins})
     return {'edges':serialize(edges)}, {'id':scenario['id'],'paths':len(paths),
            'halted_paths':sum(p.halted for p in paths),'steps':explain,
            'inconsistent_paths':sum(p.inconsistent for p in paths),
-           'uncertain_edges':len(set.union(*projections)-edges) if projections else 0}
+           'feasible_paths':len(viable),'conditional_edges':conditional,
+           'uncertain_edges':len(conditional)}
