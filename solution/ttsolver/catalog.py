@@ -165,7 +165,13 @@ class Catalog:
                     self.routes.append((verbs or ['GET','POST','PUT','DELETE'],path,pattern,mid))
 
     def route(self, verb, path, module=None):
-        candidates = [(mid, pattern.fullmatch(path)) for verbs,_,pattern,mid in self.routes
+        candidates = [(mid, pattern.fullmatch(path), route) for verbs,route,pattern,mid in self.routes
                       if verb in verbs and (module is None or self.methods[mid]['module'] == module)
                       and pattern.fullmatch(path)]
-        return candidates[0] if len(candidates) == 1 else (None,None)
+        if not candidates: return None,None
+        # Spring resolves the most specific literal route before a variable
+        # route, e.g. /order/price/{id} before /order/{date}/{number}.
+        specificity=lambda item:(-item[2].count('{'),len(item[2]))
+        best=max(specificity(item) for item in candidates)
+        matches=[item for item in candidates if specificity(item)==best]
+        return (matches[0][0],matches[0][1]) if len(matches)==1 else (None,None)

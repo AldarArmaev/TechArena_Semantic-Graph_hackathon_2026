@@ -1,6 +1,7 @@
 import json
 import unittest
 from pathlib import Path
+from decimal import Decimal
 import javalang as j
 from ttsolver.catalog import Catalog
 from ttsolver.sql import Database
@@ -64,6 +65,34 @@ class ExecutionTests(unittest.TestCase):
         for train,expected in [('G1',True),('D2',True),('Z3',False)]:
             e.stack[-1].env['id']=train
             self.assertEqual(e.eval(expr),expected)
+
+    def test_java_library_models_used_by_payment_and_cancel(self):
+        e=self.engine()
+        iterator=e.adapters.call([1,2],'iterator',[],None,None)
+        self.assertTrue(e.adapters.call(iterator,'hasNext',[],None,None))
+        self.assertEqual(e.adapters.call(iterator,'next',[],None,None),1)
+        self.assertEqual(e.adapters.call(Decimal('3.5'),'add',[Decimal('1.5')],None,None),Decimal('5.0'))
+        headers=Obj('HttpHeaders',{'Authorization':'token'})
+        self.assertTrue(e.adapters.call(headers,'containsKey',['Authorization'],None,None))
+        self.assertEqual(e.adapters.call(headers,'getFirst',['Authorization'],None,None),'token')
+
+    def test_regular_order_endpoint_and_rebook_reference(self):
+        p=Planner(self.db.clone())
+        p.orders=[Obj('selected-order',{'id':'order-one','trainNumber':'Z1234','seatClass':2})]
+        p.trips=[Obj('trip',{'tripId':'Z1234'}),Obj('trip',{'tripId':'Z1235'})]
+        p.trip='Z1234'
+        request=p.request({'n':1,'action':'Try to rebook the collected order onto the second regular trip found'})
+        self.assertEqual(request.body['orderId'],'order-one')
+        self.assertEqual(request.body['tripId'],'Z1235')
+        self.assertEqual(request.verb,'POST')
+
+    def test_admin_state_is_visible_to_later_search(self):
+        scenario=json.loads((ROOT/'scenarios/S6.json').read_text())
+        _,report=run_scenario(self.c,self.db,scenario)
+        self.assertEqual(report['halted_paths'],0)
+        search=next(x for x in report['steps'] if x['step']==8)
+        self.assertTrue(any(e['kind']=='SqlAccess' for e in search['events']))
+        self.assertNotIn('Unknown(reason=',str(search['response'])[:60])
 
     def test_empty_repository_still_sql(self):
         e=Engine(self.c,self.db.clone(),'fixture')

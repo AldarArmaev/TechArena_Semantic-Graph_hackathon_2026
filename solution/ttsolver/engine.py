@@ -97,7 +97,13 @@ class Engine:
     def field(self,obj,name):
         if isinstance(obj,Unknown): return obj
         if obj is None: raise JavaException('NullPointerException')
+        if isinstance(obj,(list,str)) and name=='length': return len(obj)
         if isinstance(obj,TypeRef):
+            short=obj.name.rsplit('.',1)[-1]
+            java_limits={'Long':(2**63-1,-2**63),'Integer':(2**31-1,-2**31),
+                         'Short':(2**15-1,-2**15),'Byte':(2**7-1,-2**7)}
+            if short in java_limits and name in ('MAX_VALUE','MIN_VALUE'):
+                return java_limits[short][name=='MIN_VALUE']
             tid = self.c.resolve_type(obj.name,self.mid)
             declaration = self.c.type_ast.get(tid)
             if isinstance(declaration,j.tree.EnumDeclaration):
@@ -105,8 +111,8 @@ class Engine:
                 if key not in self.enums:
                     const = next((v for v in declaration.body.constants if v.name == name),None)
                     if const:
-                        params = declaration.constructors[0].parameters if declaration.constructors else []
-                        fields = {p.name:self.eval(v) for p,v in zip(params,const.arguments)}
+                        names=[field for field,(_,_,_) in self.c.fields[tid].items()]
+                        fields = {field:self.eval(v) for field,v in zip(names,const.arguments)}
                         self.enums[key] = Obj(tid,fields,name)
                 if key in self.enums: return self.enums[key]
             fs = self.c.fields.get(tid,{})
@@ -173,6 +179,11 @@ class Engine:
             value = None
         except Returned as r:
             value = r.value
+        except JavaException as ex:
+            if not getattr(ex,'recorded',False):
+                self.event('Exception',evidence=ex.kind)
+                ex.recorded=True
+            raise
         finally:
             self.stack.pop()
         self.event('Return',method=mid,values={'value':value})
@@ -185,6 +196,7 @@ class Engine:
         self.operations += 1
         if self.operations > 60000: raise Limit('statement budget 60000')
         if node is None: return
+        if type(node) is j.tree.Statement: return  # empty Java statement ';'
         if isinstance(node,list): return self.block(node)
         if isinstance(node,j.tree.BlockStatement): return self.block(node.statements or [])
         if isinstance(node,(j.tree.LocalVariableDeclaration,j.tree.VariableDeclaration)):
@@ -393,6 +405,9 @@ class Engine:
                 return self.adapters.repository(receiver,name,args,site)
             if isinstance(receiver,Obj):
                 field = name[3:4].lower()+name[4:] if name.startswith(('get','set')) else name[2:3].lower()+name[3:]
+                if field not in self.c.fields.get(tid,{}) and field not in receiver.fields:
+                    alternate='is'+field[:1].upper()+field[1:]
+                    if alternate in self.c.fields.get(tid,{}) or alternate in receiver.fields: field=alternate
                 if field in self.c.fields.get(tid,{}) or field in receiver.fields:
                     if name.startswith(('get','is')) and not args:
                         self.adapters.collection_read(receiver,field)
@@ -403,5 +418,7 @@ class Engine:
         if not node.qualifier:
             unit = self.c.units[self.c.methods[self.mid]['file']]
             imported = next((i.path.rsplit('.',1)[0] for i in unit.imports if i.static and i.path.endswith('.'+name)),None)
+            if not imported:
+                imported = next((i.path for i in unit.imports if i.static and i.wildcard and i.path.endswith('ResponseEntity') and name in ('ok','status')),None)
             if imported: receiver = TypeRef(imported)
         return self.adapters.call(receiver,name,args,site,node)

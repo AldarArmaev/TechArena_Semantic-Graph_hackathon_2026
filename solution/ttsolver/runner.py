@@ -13,6 +13,7 @@ class PathState:
     events: list = field(default_factory=list)
     conditions: tuple = ()
     halted: bool = False
+    inconsistent: bool = False
 
 
 def run_scenario(catalog,initial_db,scenario,max_paths=8):
@@ -52,6 +53,8 @@ def run_scenario(catalog,initial_db,scenario,max_paths=8):
                 except Limit as ex:
                     engine.diagnostic(str(ex))
                     trial.halted=True
+                    if 'trip not selected by preceding response' in str(ex) and 'trip' in request.action.text.lower():
+                        trial.inconsistent=True
                 trial.events.extend(engine.events)
                 trial.conditions=tuple(engine.conditions)
                 trial.planner.observe(request,response)
@@ -61,8 +64,10 @@ def run_scenario(catalog,initial_db,scenario,max_paths=8):
                                 'response':describe(response),'halted':trial.halted,
                                 'events':[e.json() for e in engine.events]})
         paths=completed
-    projections=[policy.project(path.events,catalog) for path in paths]
+    viable=[path for path in paths if not path.inconsistent]
+    projections=[policy.project(path.events,catalog) for path in (viable or paths)]
     edges=set.intersection(*projections) if projections else set()
     return {'edges':serialize(edges)}, {'id':scenario['id'],'paths':len(paths),
            'halted_paths':sum(p.halted for p in paths),'steps':explain,
+           'inconsistent_paths':sum(p.inconsistent for p in paths),
            'uncertain_edges':len(set.union(*projections)-edges) if projections else 0}

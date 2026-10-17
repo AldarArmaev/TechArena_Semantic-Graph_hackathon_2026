@@ -59,13 +59,20 @@ class Planner:
 
     @staticmethod
     def unwrap(value):
-        if isinstance(value,Obj) and 'body' in value.fields: value=value.fields['body']
+        while isinstance(value,Obj) and 'body' in value.fields: value=value.fields['body']
         if isinstance(value,Obj) and 'data' in value.fields: return value.fields['data']
         return value
 
     @staticmethod
     def get(obj,key):
         return obj.fields.get(key,Unknown('missing selected '+key)) if isinstance(obj,Obj) else Unknown('missing selected '+key)
+
+    @staticmethod
+    def trip_number(trip_id):
+        if isinstance(trip_id,Obj) and 'number' in trip_id.fields:
+            family=trip_id.fields.get('type')
+            return str(family.identity if isinstance(family,Obj) else '')+str(trip_id.fields['number'])
+        return trip_id
 
     def parse(self,step):
         text = step['action']; s = text.lower()
@@ -125,8 +132,8 @@ class Planner:
         api='/api/v1'; family=a.train_family
         order_path=api+('/orderOtherService/orderOther' if family=='regular' else '/orderservice/order')
         travel=api+('/travel2service' if family=='regular' else '/travelservice')
-        idx=1 if a.selected_reference=='second' else 0 if a.selected_reference=='first' else -1
-        order=self.orders[idx] if self.orders and abs(idx)<len(self.orders)+1 else Unknown('new order not created')
+        idx=1 if a.selected_reference=='second' and intent!='rebook' else 0 if a.selected_reference=='first' else -1
+        order=self.orders[idx] if -len(self.orders)<=idx<len(self.orders) else Unknown('new order not created')
         oid=self.get(order,'id')
         def path_value(value):
             return value if isinstance(value,str) else '{unresolved}'
@@ -165,7 +172,7 @@ class Planner:
             body={'tripId':self.trip,'from':self.from_station,'to':self.to_station,'travelDate':self.travel_date}
         elif intent=='food_menu': path=api+'/foodservice/foods/'+self.travel_date+'/'+self.from_station+'/'+self.to_station+'/'+path_value(self.trip)
         elif intent=='food_stores':
-            stations=[r for r in self.db.rows('stations') if r.get('name','').replace(' ','').lower()=='suzhou']
+            stations=[r for r in self.db.rows('station') if r.get('name','').replace(' ','').lower()=='suzhou']
             path=api+'/stationfoodservice/stationfoodstores/'+(stations[0]['id'] if stations else '{unresolved}')
         elif intent=='preserve':
             path=api+('/preserveotherservice/preserveOther' if family=='regular' else '/preserveservice/preserve'); verb='POST'
@@ -187,7 +194,7 @@ class Planner:
         elif intent in ('cancel','refund_quote'): path=api+'/cancelservice/cancel/'+('refound/'+path_value(oid) if intent=='refund_quote' else path_value(oid)+'/'+str(self.account))
         elif intent=='rebook':
             path=api+'/rebookservice/rebook'; verb='POST'
-            trip=self.get(self.trips[1],'tripId') if 'second' in s and len(self.trips)>1 else self.trip
+            trip=self.trip_number(self.get(self.trips[1],'tripId')) if 'second' in s and len(self.trips)>1 else self.trip
             body={'orderId':oid,'oldTripId':self.get(order,'trainNumber'),'tripId':trip,'seatType':a.seat_class or self.get(order,'seatClass'),'date':self.travel_date,'loginId':self.account}
         elif intent=='assurance': path=api+'/assuranceservice/assurance/orderid/'+path_value(oid)
         elif intent=='assurance_types': path=api+'/assuranceservice/assurances/types'
@@ -202,6 +209,38 @@ class Planner:
             self.registered_username='symbolic-new-passenger'
             body={'userName':self.registered_username,'password':'111111','gender':1,'documentType':1,'documentNum':'symbolic-new-document','email':'passenger@example.invalid'}
         elif intent=='admin_orders': path=api+'/adminorderservice/adminorder'
+        elif intent=='add_station':
+            path=api+'/adminbasicservice/adminbasic/stations'; verb='POST'
+            name=re.search(r'new station (.+?) with',a.text,re.I)
+            stay=re.search(r'(\d+) minutes',s)
+            body={'name':name[1].replace(' ','').lower() if name else Unknown('station name'), 'stayTime':int(stay[1]) if stay else Unknown('stay time')}
+        elif intent=='add_train':
+            path=api+'/adminbasicservice/adminbasic/trains'; verb='POST'
+            name=re.search(r'train type (\w+)',a.text,re.I)
+            second=re.search(r'(\d+) second-class',s); first=re.search(r'(\d+) first-class',s); speed=re.search(r'speed of (\d+)',s)
+            body={'name':name[1] if name else Unknown('train name'),'economyClass':int(second[1]) if second else Unknown('seat count'),
+                  'confortClass':int(first[1]) if first else Unknown('seat count'),'averageSpeed':int(speed[1]) if speed else Unknown('speed')}
+        elif intent=='add_route':
+            path=api+'/adminrouteservice/adminroute'; verb='POST'
+            match=re.search(r'new route (.+?) with distances (.+)',a.text,re.I)
+            names=[n.strip().replace(' ','').lower() for n in re.split(r'—| - ',match[1])] if match else []
+            distances=re.findall(r'\d+',match[2]) if match else []
+            body={'loginId':self.account,'startStation':names[0] if names else Unknown('route start'),'endStation':names[-1] if names else Unknown('route end'),
+                  'stationList':','.join(names),'distanceList':','.join(distances)}
+        elif intent=='add_price':
+            path=api+'/adminbasicservice/adminbasic/prices'; verb='POST'
+            train=re.search(r'train type (\w+)',a.text,re.I); basic=re.search(r'basic rate ([\d.]+)',s); first=re.search(r'first-class rate ([\d.]+)',s)
+            body={'routeId':self.new_route,'trainType':train[1] if train else Unknown('train type'),
+                  'basicPriceRate':basic[1] if basic else Unknown('basic rate'),'firstClassPriceRate':first[1] if first else Unknown('first class rate')}
+        elif intent=='add_trip':
+            path=api+'/admintravelservice/admintravel'; verb='POST'
+            match=re.search(r'trip (\w+) of type (\w+).*from (.+?) via (.+?) to (.+?), departing (\d+:\d+) and arriving (\d+:\d+)',a.text,re.I)
+            if match:
+                trip,train,start,via,end,dep,arr=match.groups()
+                body={'loginId':self.account,'tripId':trip,'trainTypeName':train,'routeId':self.new_route,
+                      'startStationName':start.replace(' ','').lower(),'stationsName':via.replace(' ','').lower(),
+                      'terminalStationName':end.replace(' ','').lower(),'startTime':self.travel_date+' '+dep+':00','endTime':self.travel_date+' '+arr+':00'}
+            else: body=Unknown('admin trip request fields')
         elif intent=='consign_update':
             path=api+'/consignservice/consigns'; verb='PUT'
             body=dict(self.consign.fields) if isinstance(self.consign,Obj) else {'id':Unknown('consignment lookup failed')}
@@ -218,7 +257,11 @@ class Planner:
         if intent=='contacts' and isinstance(value,list) and value: self.contact=value[0]
         if intent=='add_contact' and isinstance(value,Obj): self.new_contact=value; self.contact=self.contact or value
         if intent=='search' and isinstance(value,list) and value:
-            self.trips=value; self.trip=self.get(value[0],'tripId')
+            self.trips=value
+            self.trip=self.trip_number(self.get(value[0],'tripId'))
+        if intent=='advanced' and request.path.endswith('/cheapest') and isinstance(value,list) and value:
+            self.trips=value
+            self.trip=self.get(value[0],'tripId')
         if intent=='preserve':
             # Link new orders by actual state mutation, never by assumed success.
             known={self.get(o,'id') for o in self.orders}
@@ -229,3 +272,4 @@ class Planner:
                     self.orders.append(Obj('selected-order',fields,row['id']))
         if intent=='consign':
             self.consign=value[0] if isinstance(value,list) and value else value
+        if intent=='add_route' and isinstance(value,Obj): self.new_route=value.fields.get('id')

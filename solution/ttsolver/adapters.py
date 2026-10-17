@@ -32,6 +32,7 @@ class Adapters:
         if short == 'UsernamePasswordAuthenticationToken':
             return Obj(short,dict(zip(('username','password'),args)))
         if short == 'SimpleDateFormat': return Obj(short,{'format':args[0]})
+        if short == 'Random': return Obj(short,{'next':0})
         return Obj(short,{'arguments':args})
 
     @staticmethod
@@ -57,6 +58,7 @@ class Adapters:
         rows = e.db.rows(table,c.types[entity]['module'])
         methods = [m for m in decl.methods if m.name == name and len(m.parameters)==len(args)]
         return_type = type_name(methods[0].return_type) if methods else ''
+        query = annotation_value(methods[0].annotations,'Query') if methods else None
         idfield = next((n for n,(_,_,anns) in c.fields[entity].items() if any(a.name=='Id' for a in anns)),'id')
         idcol = columns.get(idfield,idfield)
         if name in ('save','saveAndFlush'):
@@ -64,9 +66,34 @@ class Adapters:
             if not isinstance(obj,Obj): return e.diagnostic('save unknown entity')
             if obj.fields.get(idfield) is None: obj.fields[idfield] = e.db.new_id()
             row = {col:obj.fields.get(field) for field,col in columns.items() if col in e.db.columns[e.db.key(table)]}
+            for field,(_,_,annotations) in c.fields[entity].items():
+                if not any(a.name=='Embedded' for a in annotations): continue
+                embedded=obj.fields.get(field)
+                if not isinstance(embedded,Obj): continue
+                for sub,value in embedded.fields.items():
+                    column=c.snake(sub)
+                    if column not in e.db.columns[e.db.key(table)]: continue
+                    if isinstance(value,Obj) and value.identity:
+                        enum=c.type_ast.get(value.type)
+                        if isinstance(enum,j.tree.EnumDeclaration):
+                            value=next((i for i,v in enumerate(enum.body.constants) if v.name==value.identity),value)
+                    row[column]=value
             old = next((r for r in rows if r.get(idcol)==row.get(idcol)),None)
             if old is None: rows.append(row)
             else: old.update(row)
+            for field,(_,_,annotations) in c.fields[entity].items():
+                if not any(a.name=='ElementCollection' for a in annotations): continue
+                collection=annotation_value(annotations,'CollectionTable','name') or c.snake(c.types[entity]['fqn'].split('.')[-1])+'_'+c.snake(field)
+                try: children=e.db.rows(collection,c.types[entity]['module'])
+                except KeyError: continue
+                owner_column=table+'_id'; item_column=c.snake(field)
+                order_column=annotation_value(annotations,'OrderColumn','name') or item_column+'_order'
+                children[:]=[r for r in children if r.get(owner_column)!=row.get(idcol)]
+                for position,item in enumerate(obj.fields.get(field) or []):
+                    children.append({owner_column:row.get(idcol),item_column:item,order_column:position})
+                for target in targets:
+                    if target.rsplit('.',1)[-1]==collection:
+                        e.event('SqlAccess',target,site,'persist collection '+field)
             e.event('RepositoryOperation',site=site,evidence=name,values={'table':table})
             e.event('StateMutation',site=site,evidence=name,values={'table':table,'id':row.get(idcol)})
             return obj
@@ -76,7 +103,19 @@ class Adapters:
             rows[:] = [r for r in rows if r.get(idcol)!=value]
             e.event('StateMutation',site=site,evidence=name,values={'table':table,'id':value})
             return None
-        if name in ('findAll','count'):
+        if query:
+            where=re.split(r'\bwhere\b',query,flags=re.I)
+            if len(where)!=2: return e.diagnostic('unsupported native query '+query)
+            predicates=re.split(r'\s+AND\s+',where[1],flags=re.I)
+            selected=list(rows)
+            for pred in predicates:
+                match=re.fullmatch(r'\s*(\w+)\s+(IN|=)\s*\?(\d+)\s*',pred,re.I)
+                if not match: return e.diagnostic('unsupported native predicate '+pred)
+                col,op,index=match.groups(); value=args[int(index)-1]
+                if isinstance(value,Unknown): return value
+                if op.upper()=='IN' and not isinstance(value,(list,set,tuple)): return e.diagnostic('native IN needs a collection')
+                selected=[r for r in selected if (r.get(col) in value if op.upper()=='IN' else r.get(col)==value)]
+        elif name in ('findAll','count'):
             selected = list(rows)
         elif 'By' in name:
             suffix = name.split('By',1)[1]
@@ -84,10 +123,16 @@ class Adapters:
             if len(predicates)!=len(args): return e.diagnostic('unsupported repository predicate '+name)
             filters = []
             for predicate,value in zip(predicates,args):
+                is_in=predicate.endswith('In')
+                if is_in: predicate=predicate[:-2]
                 field = predicate[0].lower()+predicate[1:]
                 if field not in columns:
                     return e.diagnostic('unresolved repository field '+field)
                 if isinstance(value,Unknown): return value
+                if is_in:
+                    if not isinstance(value,(list,set,tuple)): return e.diagnostic('derived IN needs collection '+field)
+                    filters.append((columns[field],set(value)))
+                    continue
                 if isinstance(value,Obj) and 'Embedded' in {a.name for a in c.fields[entity][field][2]}:
                     for sub,val in value.fields.items():
                         if isinstance(val,Obj) and val.identity:
@@ -95,7 +140,7 @@ class Adapters:
                             val = next((i for i,x in enumerate(enum.body.constants) if x.name==val.identity),None)
                         filters.append((c.snake(sub),val))
                 else: filters.append((columns[field],value))
-            selected = [r for r in rows if all(r.get(col)==val for col,val in filters)]
+            selected = [r for r in rows if all(r.get(col) in val if isinstance(val,set) else r.get(col)==val for col,val in filters)]
         else: return e.diagnostic('unsupported repository method '+name)
         e.event('RepositoryOperation',site=site,evidence=name,values={'table':table,'rows':len(selected)})
         if name == 'count': return len(selected)
@@ -136,14 +181,22 @@ class Adapters:
         # to the application repository load when it accesses the collection.
         if e.callback_depth:
             return
-        expected = annotation_value(meta[2],'CollectionTable','name')
-        matches = [t for t in targets if t.rsplit('.',1)[-1] == expected] if expected else [t for t in targets if t.rsplit('.',1)[-1].endswith('_'+c.snake(field))]
+        expected = annotation_value(meta[2],'CollectionTable','name') or c.snake(c.types[obj.type]['fqn'].split('.')[-1])+'_'+c.snake(field)
+        matches = [t for t in targets if t.rsplit('.',1)[-1] == expected]
+        # The dump still supplies values needed by downstream code even where
+        # skeleton has no permissible data pair for the collection SQL.
         for target in matches:
             e.event('SqlAccess',target,site,'lazy collection '+field,method=owner,confidence='STRONG')
-            data = e.db.rows(target.rsplit('.',1)[-1])
+        try:
+            data = e.db.rows(expected,c.types[obj.type]['module'])
+        except KeyError:
+            e.diagnostic('collection table missing '+expected)
+            return
+        if data is not None:
             identity_values = {str(v) for k,v in row.items() if k=='id' or k.endswith('_id')}
             matching = [r for r in data if any(str(v) in identity_values for k,v in r.items() if k.endswith('_id'))]
             ordercol = annotation_value(meta[2],'OrderColumn','name')
+            if not ordercol and any(a.name=='OrderColumn' for a in meta[2]): ordercol=c.snake(field)+'_order'
             if ordercol: matching.sort(key=lambda r:r.get(ordercol,0))
             col = c.snake(field)
             obj.fields[field] = [r[col] for r in matching if col in r]
@@ -191,7 +244,29 @@ class Adapters:
         e.event('HttpHandlerEntered',mid,site,'exact verb/path/deployment match')
         self.filter()
         result=self.bind_handler(mid,match,body)
+        self.serialize_entities(result)
         return result if isinstance(result,Obj) and result.type in ('ResponseEntity','HttpEntity') else Obj('ResponseEntity',{'body':result})
+
+    def serialize_entities(self,value):
+        """Jackson consumes entity collections at the outgoing HTTP boundary.
+
+        It does not add reflected getter calls. SQL retains repository ownership.
+        """
+        if isinstance(value,OptionalValue):
+            self.serialize_entities(value.value)
+        elif isinstance(value,Obj):
+            if value.origin:
+                for field,(_,_,annotations) in self.e.c.fields.get(value.type,{}).items():
+                    if any(a.name=='ElementCollection' for a in annotations): self.collection_read(value,field)
+            for key,child in list(value.fields.items()):
+                if isinstance(child,OptionalValue):
+                    child=child.value
+                    value.fields[key]=child
+                self.serialize_entities(child)
+        elif isinstance(value,dict):
+            for child in value.values(): self.serialize_entities(child)
+        elif isinstance(value,list):
+            for child in value: self.serialize_entities(child)
 
     def bind_handler(self,mid,match,body):
         e,c = self.e,self.e.c
@@ -210,7 +285,7 @@ class Adapters:
                 elif t in ('double','Double','float','Float'): value = self.number(value)
                 elif t in ('boolean','Boolean'): value = value=='true'
                 args.append(value)
-            elif 'RequestHeader' in anns or t == 'HttpHeaders': args.append(Obj('HttpHeaders',{}))
+            elif 'RequestHeader' in anns or t == 'HttpHeaders': args.append(Obj('HttpHeaders',{'Authorization':'context-authentication'}))
             else:
                 target = c.resolve_type(t,mid)
                 if isinstance(body,dict):
@@ -236,6 +311,10 @@ class Adapters:
         e = self.e
         typename = r.name if isinstance(r,TypeRef) else r.type if isinstance(r,Obj) else type(r).__name__
         short = typename.rsplit(':',1)[-1].split('.')[-1]
+        if isinstance(r,TypeRef) and r.name in e.c.type_ast and isinstance(e.c.type_ast[r.name],j.tree.EnumDeclaration):
+            constants=e.c.type_ast[r.name].body.constants
+            if name=='values': return [e.field(r,v.name) for v in constants]
+            if name=='valueOf' and len(args)==1: return e.field(r,args[0])
         if short=='LoggerFactory' and name=='getLogger': return Obj('Logger',{})
         if short=='Collectors' and name=='toList': return TypeRef('Collector')
         if short=='ResponseEntity' and name=='ok': return Obj('ResponseEntity',{'body':args[0]})
@@ -272,6 +351,7 @@ class Adapters:
         if isinstance(r,list):
             if name in ('size','length'): return len(r)
             if name == 'isEmpty': return not r
+            if name == 'iterator': return Obj('Iterator',{'values':r,'index':0})
             if name in ('get','set'):
                 if isinstance(args[0],Unknown): return args[0]
                 idx = int(args[0])
@@ -286,9 +366,37 @@ class Adapters:
             if name == 'contains': return args[0] in r
             if name == 'indexOf': return r.index(args[0]) if args[0] in r else -1
             if name in ('stream','parallelStream','collect','toArray'): return r
-            if name == 'map': return r
+            if name in ('filter','map') and len(args)==1 and isinstance(args[0],Deferred):
+                expr=args[0].node
+                if isinstance(expr,j.tree.MethodReference):
+                    if name=='map': return [Obj('MethodReferenceResult',{'value':v}) for v in r]
+                    return e.diagnostic('unsupported filter method reference')
+                params=expr.parameters or []
+                var=params[0] if isinstance(params[0],str) else getattr(params[0],'name',getattr(params[0],'member','item')) if params else 'item'
+                result=[]
+                frame=e.stack[-1]
+                missing=object(); previous=frame.env.get(var,missing)
+                try:
+                    for item in r:
+                        frame.env[var]=item
+                        value=e.eval(expr.body) if not isinstance(expr.body,list) else self._lambda_block(expr.body)
+                        if name=='filter':
+                            if not isinstance(value,(bool,Unknown)):
+                                recovered=self._parenthesized_lambda(site)
+                                if recovered is not None:
+                                    e.event('ASTRecovery',site=site,evidence='javalang omitted selector in parenthesized lambda; reparsed source expression')
+                                    value=e.eval(recovered)
+                            if e.branch(value,expr.body): result.append(item)
+                        else: result.append(value)
+                finally:
+                    if previous is missing: frame.env.pop(var,None)
+                    else: frame.env[var]=previous
+                return result
             if name == 'remove':
                 if args[0] in r: r.remove(args[0])
+                return True
+            if name == 'removeAll' and isinstance(args[0],list):
+                r[:]=[v for v in r if v not in args[0]]
                 return True
         if isinstance(r,dict):
             if name == 'get': return r.get(args[0]) if not isinstance(args[0],Unknown) else args[0]
@@ -323,6 +431,20 @@ class Adapters:
         if short == 'System' and name=='currentTimeMillis': return int((e.now-datetime(1970,1,1)).total_seconds()*1000)
         if short in ('Integer','Long','Double','Float','BigDecimal'):
             if name.startswith(('parse','valueOf')): return self.number(args[0],short in ('Integer','Long'))
+        if short == 'Boolean' and name == 'parseBoolean':
+            return str(args[0]).lower() == 'true' if not isinstance(args[0],Unknown) else args[0]
+        if isinstance(r,(int,Decimal)) and not isinstance(r,bool):
+            if name in ('add','subtract','multiply','divide','compareTo') and args:
+                u=unknown(r,args[0])
+                if u is not None: return u
+                rhs=self.number(args[0])
+                if isinstance(rhs,Unknown): return rhs
+                lhs=Decimal(str(r))
+                if name=='add': return lhs+rhs
+                if name=='subtract': return lhs-rhs
+                if name=='multiply': return lhs*rhs
+                if name=='divide': return lhs/rhs if rhs else Unknown('divide by zero')
+                return (lhs>rhs)-(lhs<rhs)
         if short == 'String' and name=='valueOf': return e.java_string(args[0])
         if short=='Math' and name in ('min','max','abs'):
             u=unknown(*args)
@@ -334,6 +456,36 @@ class Adapters:
             if name=='emptyList': return []
             if name=='sort' and isinstance(args[0],list): return None
         if isinstance(r,Obj):
+            if short=='ResponseEntity':
+                if name=='getStatusCode': return TypeRef('HttpStatus.ACCEPTED')
+                if name=='getStatusCodeValue': return 202
+            if short=='HttpHeaders':
+                key=args[0] if args else None
+                if isinstance(key,TypeRef): key=key.name.rsplit('.',1)[-1]
+                if name=='containsKey': return key in r.fields
+                if name=='getFirst': return r.fields.get(key)
+                if name in ('add','set'):
+                    r.fields[key]=args[1]
+                    return None
+            if short=='Iterator':
+                values=r.fields['values']; index=r.fields['index']
+                if name=='hasNext': return index<len(values)
+                if name=='next':
+                    if index>=len(values): raise JavaException('NoSuchElementException')
+                    r.fields['index']=index+1
+                    return values[index]
+                if name=='remove':
+                    if index==0: raise JavaException('IllegalStateException')
+                    values.pop(index-1); r.fields['index']=index-1
+                    return None
+            if short=='Random' and name=='nextInt':
+                bound=args[0]
+                if isinstance(bound,Unknown): return bound
+                if not isinstance(bound,int) or bound<=0: raise JavaException('IllegalArgumentException')
+                result=r.fields['next']%bound
+                r.fields['next']+=1
+                e.event('Assumption',site=site,evidence='bounded representative of Random.nextInt; seat identity is unscored',confidence='STRONG')
+                return result
             if name.startswith(('get','is')) and not args:
                 key = name[3:4].lower()+name[4:] if name.startswith('get') else name[2:3].lower()+name[3:]
                 if key in r.fields: return r.fields[key]
@@ -354,7 +506,8 @@ class Adapters:
                     r.fields['date']+=timedelta(minutes=float(args[1])); return None
         if short=='Calendar' and name=='getInstance': return Obj('Calendar',{'date':e.now})
         if name in ('conveterObject','convertValue','readValue','parseObject') and args:
-            value = deepcopy(args[0])
+            raw = args[0].value if isinstance(args[0],OptionalValue) else args[0]
+            value = deepcopy(raw)
             if len(args)>1 and isinstance(args[1],TypeRef) and isinstance(value,Obj): value.type=args[1].name
             return value
         if name in ('writeValueAsString','object2Json','toJSONString') and args: return deepcopy(args[0])
@@ -366,3 +519,29 @@ class Adapters:
         if name=='setSubject' and isinstance(r,dict): return r
         if isinstance(r,Unknown): return r
         return e.diagnostic('unsupported library call '+typename+'.'+name)
+
+    def _lambda_block(self,statements):
+        from .engine import Returned
+        try:
+            self.e.block(statements)
+        except Returned as done:
+            return done.value
+        return None
+
+    def _parenthesized_lambda(self,site):
+        if site is None: return None
+        node=self.e.c.nodes[site]
+        path=self.e.c.source/node['file']
+        lines=path.read_text(encoding='utf-8-sig').splitlines()
+        source=' '.join(lines[node['line']-1:node['line']+5])
+        match=re.search(r'->\s*\(',source)
+        if not match: return None
+        start=match.end(); depth=1
+        for i in range(start,len(source)):
+            if source[i]=='(': depth+=1
+            elif source[i]==')':
+                depth-=1
+                if depth==0:
+                    try: return j.parse.parse_expression(source[start:i])
+                    except j.parser.JavaSyntaxError: return None
+        return None
